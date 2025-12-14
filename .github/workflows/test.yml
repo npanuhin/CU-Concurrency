@@ -1,0 +1,44 @@
+name: Tests
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        day:
+          - compile
+          # - day1
+          # - day2
+          # - day3
+          # - day4
+          # - day5
+          # - day6
+          # - day7
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: gradle
+
+      - name: Compile
+        if: ${{ matrix.day == 'compile' }}
+        run: |
+          chmod +x ./gradlew
+          ./gradlew assemble --no-daemon
+
+      - name: Run tests
+        if: ${{ matrix.day != 'compile' }}
+        run: |
+          chmod +x ./gradlew
+          ./gradlew test --tests '${{ matrix.day }}.*' --no-daemon
