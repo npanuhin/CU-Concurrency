@@ -1,6 +1,5 @@
-package dijkstra
+package day7
 
-import day7.*
 import junit.framework.Assert.*
 import org.junit.*
 import java.util.*
