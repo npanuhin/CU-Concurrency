@@ -2,7 +2,6 @@
 
 package day4
 
-import day4.*
 import java.util.concurrent.atomic.*
 
 class MSQueueWithLinearTimeRemove<E> : QueueWithRemove<E> {
@@ -16,18 +15,40 @@ class MSQueueWithLinearTimeRemove<E> : QueueWithRemove<E> {
     }
 
     override fun enqueue(element: E) {
-        // TODO: When adding a new node, check whether
-        // TODO: the previous tail is logically removed.
-        // TODO: If so, remove it physically from the linked list.
-        TODO("Implement me!")
+        while (true) {
+            val curTail = tail.get()
+            val newNode = Node(element)
+            val tailNext = curTail.next.get()
+
+            if (tailNext != null) {
+                tail.compareAndSet(curTail, tailNext)
+                continue
+            }
+
+            if (curTail.next.compareAndSet(null, newNode)) {
+                tail.compareAndSet(curTail, newNode)
+                if (curTail.extractedOrRemoved) {
+                    curTail.remove()
+                }
+                return
+            } else {
+                tail.compareAndSet(curTail, curTail.next.get())
+                if (curTail.extractedOrRemoved) {
+                    curTail.remove()
+                }
+            }
+        }
     }
 
     override fun dequeue(): E? {
-        // TODO: After moving the `head` pointer forward,
-        // TODO: mark the node that contains the extracting
-        // TODO: element as "extracted or removed", restarting
-        // TODO: the operation if this node has already been removed.
-        TODO("Implement me!")
+        while (true) {
+            val curHead = head.get()
+            val headNext = curHead.next.get() ?: return null
+
+            if (head.compareAndSet(curHead, headNext) && headNext.markExtractedOrRemoved()) {
+                return headNext.element
+            }
+        }
     }
 
     override fun remove(element: E): Boolean {
@@ -63,16 +84,11 @@ class MSQueueWithLinearTimeRemove<E> : QueueWithRemove<E> {
         }
     }
 
-    // TODO: Node is an inner class for accessing `head` in `remove()`
     private inner class Node(
         var element: E?
     ) {
         val next = AtomicReference<Node?>(null)
 
-        /**
-         * TODO: Both [dequeue] and [remove] should mark
-         * TODO: nodes as "extracted or removed".
-         */
         private val _extractedOrRemoved = AtomicBoolean(false)
         val extractedOrRemoved
             get() =
@@ -88,17 +104,25 @@ class MSQueueWithLinearTimeRemove<E> : QueueWithRemove<E> {
          * removed by [remove] or extracted by [dequeue].
          */
         fun remove(): Boolean {
-            // TODO: The removal procedure is split into two phases.
-            // TODO: First, you need to mark the node as "extracted or removed".
-            // TODO: On success, this node is logically removed, and the
-            // TODO: operation should return `true` at the end.
-            // TODO: In the second phase, the node should be removed
-            // TODO: physically, updating the `next` field of the previous
-            // TODO: node to `this.next.value`.
-            // TODO: Do not remove `head` and `tail` physically to make
-            // TODO: the algorithm simpler. In case a tail node is logically removed,
-            // TODO: it will be removed physically by `enqueue(..)`.
-            TODO("Implement me!")
+            val isRemoved = markExtractedOrRemoved()
+
+            val curNext = next.get() ?: return isRemoved
+            val curPrev = findPrev() ?: return isRemoved
+
+            curPrev.next.compareAndSet(this, curNext)
+
+            if (curNext.extractedOrRemoved) curNext.remove()
+
+            return isRemoved
+        }
+
+        private fun findPrev(): Node? {
+            var currNode = head.get()
+            while (true) {
+                val nextNode = currNode.next.get() ?: return null
+                if (nextNode === this) return currNode
+                currNode = nextNode
+            }
         }
     }
 }
